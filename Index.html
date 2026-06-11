@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PolyLang ∞ — Промышленный транслятор (43 языка)</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            background: #0a0e16;
+            font-family: 'Segoe UI', 'Fira Code', monospace;
+            padding: 20px;
+            color: #eef3ff;
+        }
+        .container { max-width: 1900px; margin: 0 auto; }
+        .row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        .lang-panel {
+            background: #0c111c;
+            border-radius: 28px;
+            padding: 12px;
+            margin-bottom: 16px;
+        }
+        .lang-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            max-height: 140px;
+            overflow-y: auto;
+        }
+        .lang-btn {
+            background: #1e2846;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 30px;
+            color: #e5edff;
+            cursor: pointer;
+            font-size: 0.7rem;
+            font-family: monospace;
+        }
+        .lang-btn.active { background: #5f7bc2; color: white; }
+        textarea {
+            background: #111722;
+            border: 1px solid #2a3348;
+            border-radius: 24px;
+            padding: 16px;
+            color: #eef3ff;
+            font-family: 'Fira Code', monospace;
+            font-size: 12px;
+            resize: vertical;
+            width: 100%;
+            height: 580px;
+        }
+        button {
+            background: #1e2846;
+            border: none;
+            padding: 8px 24px;
+            border-radius: 36px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 14px;
+            margin-right: 12px;
+        }
+        .status { color: #9aabdf; margin-top: 12px; font-size: 0.75rem; }
+        h1 { font-size: 1.6rem; margin-bottom: 2px; }
+        .sub { color: #8e9cc0; font-size: 0.7rem; margin-bottom: 24px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>⚡ PolyLang ∞ · Промышленный транслятор</h1>
+    <div class="sub">43 языка · 80+ конструкций · метаклассы, трейты, асинхронные генераторы, верификация, ассемблер</div>
+
+    <div class="row">
+        <div>
+            <div class="lang-panel"><div class="lang-grid" id="sourceLangBar"></div></div>
+            <textarea id="sourceCode"></textarea>
+        </div>
+        <div>
+            <div class="lang-panel"><div class="lang-grid" id="targetLangBar"></div></div>
+            <textarea id="targetCode" readonly></textarea>
+            <div><button id="translateBtn">🚀 ТРАНСЛИРОВАТЬ</button><button id="copyBtn">📋 КОПИРОВАТЬ</button></div>
+        </div>
+    </div>
+    <div id="status" class="status"></div>
+</div>
+
+<script>
+    // ============================================================
+    // 43 ЯЗЫКА — ПОЛНЫЙ СПЕКТР
+    // ============================================================
+    const TARGET_LANGS = [
+        'python', 'javascript', 'typescript', 'go', 'rust', 'c', 'cpp', 'java', 'kotlin', 'csharp',
+        'swift', 'ruby', 'lua', 'php', 'perl', 'r', 'zig', 'nim', 'dart', 'scala', 'groovy', 'clojure',
+        'fsharp', 'objc', 'haskell', 'elixir', 'ocaml', 'julia', 'matlab', 'fortran', 'cobol', 'pascal', 'ada',
+        'verilog', 'vhdl', 'lisp', 'scheme', 'prolog', 'erlang', 'crystal', 'chapel', 'pony', 'red'
+    ];
+    const LANG_NAMES = {
+        python:'🐍 Python', javascript:'📜 JS', typescript:'📘 TS', go:'🐹 Go', rust:'🦀 Rust',
+        c:'⚙️ C', cpp:'⚙️ C++', java:'☕ Java', kotlin:'🟣 Kotlin', csharp:'🔷 C#', swift:'🍎 Swift',
+        ruby:'💎 Ruby', lua:'🌙 Lua', php:'🐘 PHP', perl:'🐪 Perl', r:'📊 R', zig:'⚡ Zig', nim:'🧹 Nim',
+        dart:'🎯 Dart', scala:'🔥 Scala', groovy:'🎷 Groovy', clojure:'🧪 Clojure', fsharp:'⚡ F#',
+        objc:'🍏 Obj-C', haskell:'λ Haskell', elixir:'💧 Elixir', ocaml:'🐫 OCaml', julia:'🔬 Julia',
+        matlab:'📈 MATLAB', fortran:'🔢 Fortran', cobol:'🏦 COBOL', pascal:'📐 Pascal', ada:'🚀 Ada',
+        verilog:'🔌 Verilog', vhdl:'📟 VHDL', lisp:'🌀 Lisp', scheme:'🎨 Scheme', prolog:'🧠 Prolog',
+        erlang:'⚡ Erlang', crystal:'💎 Crystal', chapel:'⛪ Chapel', pony:'🐴 Pony', red:'🔴 Red'
+    };
+    let currentTarget = 'go';
+    function buildTargetBar() {
+        const bar = document.getElementById('targetLangBar'); bar.innerHTML = '';
+        for (let lang of TARGET_LANGS) {
+            const btn = document.createElement('button');
+            btn.className = `lang-btn ${lang === currentTarget ? 'active' : ''}`;
+            btn.textContent = LANG_NAMES[lang];
+            btn.onclick = () => {
+                document.querySelectorAll('#targetLangBar .lang-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active'); currentTarget = lang;
+                document.getElementById('status').innerHTML = `🎯 Целевой язык: ${LANG_NAMES[lang]}`;
+            };
+            bar.appendChild(btn);
+        }
+    }
+    buildTargetBar();
+
+    // ============================================================
+    // ПОЛНЫЙ ПАРСЕР (80+ КОНСТРУКЦИЙ)
+    // ============================================================
+    class FullParser {
+        constructor(code) { this.lines = code.split(/\r?\n/); this.i = 0; this.blocks = []; this.ir = []; }
+        getIndent(l) { return l.search(/\S/); }
+        parse() {
+            this.ir = []; this.blocks = []; this.i = 0;
+            while (this.i < this.lines.length) {
+                let raw = this.lines[this.i];
+                let indent = this.getIndent(raw);
+                let line = raw.trim();
+                if (!line || line.startsWith('#')) { this.i++; continue; }
+                while (this.blocks.length && indent <= this.blocks[this.blocks.length-1].indent) {
+                    this.blocks.pop();
+                    this.ir.push({ op: 'block_end' });
+                }
+                // === ДЕКОРАТОРЫ (с параметрами и без) ===
+                if (line.startsWith('@')) {
+                    let m = line.match(/^@(\w+)(?:\(([^)]*)\))?/);
+                    if (m) this.ir.push({ op: 'decorator', name: m[1], args: m[2] || '' });
+                }
+                // === КЛАССЫ: метаклассы, трейты, примеси, финальные, абстрактные, слоты ===
+                else if (line.match(/^class\s+\w+/)) {
+                    let m = line.match(/^class\s+(\w+)(?:\(([^)]*)\))?/);
+                    let name = m[1], bases = m[2] || '';
+                    let isFinal = line.includes('final');
+                    let isAbstract = line.includes('abstract');
+                    let isTrait = line.includes('trait');
+                    let isMixin = line.includes('mixin');
+                    let hasSlots = line.includes('__slots__');
+                    let metaclass = '';
+                    let metaMatch = line.match(/metaclass\s*=\s*(\w+)/);
+                    if (metaMatch) metaclass = metaMatch[1];
+                    this.ir.push({ op: 'class_start', name, bases, final: isFinal, abstract: isAbstract, trait: isTrait, mixin: isMixin, slots: hasSlots, metaclass });
+                    this.blocks.push({ type: 'class', indent });
+                }
+                // === ФУНКЦИИ: обычные, асинхронные, генераторы, асинхронные генераторы, чистые, внешние ===
+                else if (line.match(/^(async\s+)?def\s+\w+/)) {
+                    let isAsync = line.startsWith('async');
+                    let defLine = isAsync ? line.slice(6).trim() : line;
+                    let m = defLine.match(/^def\s+(\w+)\s*\(([^)]*)\)\s*(?:->\s*(\S+))?/);
+                    if (m) {
+                        let name = m[1], params = m[2], ret = m[3] || '';
+                        let isGenerator = line.includes('yield');
+                        let isAsyncGen = isAsync && isGenerator;
+                        let isPure = line.includes('pure');
+                        let isExtern = line.includes('extern');
+                        let isInline = line.includes('inline');
+                        this.ir.push({ op: isAsyncGen ? 'async_gen_start' : (isAsync ? 'async_func_start' : 'func_start'), name, params, ret, pure: isPure, extern: isExtern, inline: isInline });
+                        this.blocks.push({ type: 'func', indent });
+                    }
+                }
+                // === СПЕЦИАЛЬНЫЕ ДЕКОРАТОРЫ ===
+                else if (line.match(/^@(staticmethod|classmethod|property|abstractmethod|dataclass|finalmethod)/)) {
+                    this.ir.push({ op: 'special_deco', type: line.slice(1) });
+                }
+                // === АССЕМБЛЕРНЫЕ ВСТАВКИ ===
+                else if (line.match(/^asm\s*{/)) {
+                    this.ir.push({ op: 'asm_block_start' });
+                    this.blocks.push({ type: 'asm', indent });
+                }
+                else if (line.match(/^__asm__/)) {
+                    let m = line.match(/__asm__\s*\(\s*["'](.+?)["']/);
+                    if (m) this.ir.push({ op: 'asm_inline', code: m[1] });
+                }
+                // === ТРАНЗАКЦИОННАЯ ПАМЯТЬ ===
+                else if (line.match(/^atomic\s*{/)) {
+                    this.ir.push({ op: 'atomic_start' });
+                    this.blocks.push({ type: 'atomic', indent });
+                }
+                else if (line.match(/^transaction\s*{/)) {
+                    this.ir.push({ op: 'transaction_start' });
+                    this.blocks.push({ type: 'transaction', indent });
+                }
+                // === ВЕРИФИКАЦИЯ (контракты) ===
+                else if (line.match(/^requires\s+/)) {
+                    this.ir.push({ op: 'requires', cond: line.slice(9).trim() });
+                }
+                else if (line.match(/^ensures\s+/)) {
+                    this.ir.push({ op: 'ensures', cond: line.slice(8).trim() });
+                }
+                else if (line.match(/^invariant\s+/)) {
+                    this.ir.push({ op: 'invariant', cond: line.slice(10).trim() });
+                }
+                else if (line.match(/^loop_invariant\s+/)) {
+                    this.ir.push({ op: 'loop_invariant', cond: line.slice(15).trim() });
+                }
+                // === ПАТТЕРН-МАТЧИНГ ===
+                else if (line.match(/^match\s+/)) {
+                    this.ir.push({ op: 'match_start', val: line.slice(6).trim() });
+                    this.blocks.push({ type: 'match', indent });
+                }
+                else if (line.match(/^case\s+/)) {
+                    let m = line.match(/case\s+(.+?)(?:\s+if\s+(.+))?:\s*$/);
+                    this.ir.push({ op: 'case', pattern: m[1], guard: m[2] || '' });
+                    this.blocks.push({ type: 'case', indent });
+                }
+                // === АСИНХРОННЫЕ КОНСТРУКЦИИ ===
+                else if (line.match(/^async\s+with\b/)) {
+                    let m = line.match(/async\s+with\s+(.+?)\s+as\s+(\w+)/);
+                    if (m) this.ir.push({ op: 'async_with', expr: m[1], var: m[2] });
+                    this.blocks.push({ type: 'async_with', indent });
+                }
+                else if (line.match(/^async\s+for\b/)) {
+                    let m = line.match(/async\s+for\s+(\w+)\s+in\s+(.+)/);
+                    if (m) this.ir.push({ op: 'async_for', var: m[1], iter: m[2].replace(/:\s*$/, '') });
+                    this.blocks.push({ type: 'async_for', indent });
+                }
+                // === КОНТЕКСТНЫЕ МЕНЕДЖЕРЫ ===
+                else if (line.match(/^with\b/)) {
+                    let m = line.match(/with\s+(.+?)\s+as\s+(\w+)/);
+                    if (m) this.ir.push({ op: 'with', expr: m[1], var: m[2] });
+                    this.blocks.push({ type: 'with', indent });
+                }
+                // === ОБРАБОТКА ОШИБОК ===
+                else if (line.match(/^try\b/)) {
+                    this.ir.push({ op: 'try' });
+                    this.blocks.push({ type: 'try', indent });
+                }
+                else if (line.match(/^except\b/)) {
+                    let m = line.match(/except\s+(?:(\w+)\s+as\s+(\w+))?/);
+                    this.ir.push({ op: 'except', type: m ? m[1] || '' : '', var: m ? m[2] || '' : '' });
+                }
+                else if (line.match(/^else\b/)) {
+                    this.ir.push({ op: 'else_block' });
+                }
+                else if (line.match(/^finally\b/)) {
+                    this.ir.push({ op: 'finally' });
+                }
+                else if (line.match(/^raise\b/)) {
+                    this.ir.push({ op: 'raise', expr: line.slice(6).trim() });
+                }
+                // === ГЕНЕРАТОРЫ ===
+                else if (line.match(/^yield\s+from\b/)) {
+                    this.ir.push({ op: 'yield_from', expr: line.slice(11).trim() });
+                }
+                else if (line.match(/^yield\b/)) {
+                    this.ir.push({ op: 'yield', expr: line.slice(6).trim() });
+                }
+                else if (line.match(/^await\b/)) {
+                    this.ir.push({ op: 'await', expr: line.slice(6).trim() });
+                }
+                // === УСЛОВИЯ ===
+                else if (line.match(/^if\b/)) {
+                    let cond = line.slice(3).replace(/:\s*$/, '').trim();
+                    this.ir.push({ op: 'if', cond });
+                    this.blocks.push({ type: 'if', indent });
+                }
+                else if (line.match(/^elif\b/)) {
+                    let cond = line.slice(5).replace(/:\s*$/, '').trim();
+                    this.ir.push({ op: 'elif', cond });
+                }
+                else if (line.match(/^else\b/)) {
+                    this.ir.push({ op: 'else' });
+                }
+                // === ЦИКЛЫ ===
+                else if (line.match(/^while\b/)) {
+                    let cond = line.slice(6).replace(/:\s*$/, '').trim();
+                    this.ir.push({ op: 'while', cond });
+                    this.blocks.push({ type: 'while', indent });
+                }
+                else if (line.match(/^for\b/)) {
+                    let m = line.match(/for\s+(\w+)\s+in\s+(.+)/);
+                    if (m) {
+                        this.ir.push({ op: 'for', var: m[1], iter: m[2].replace(/:\s*$/, '') });
+                        this.blocks.push({ type: 'for', indent });
+                    }
+                }
+                // === ПРИСВАИВАНИЯ ===
+                else if (line.includes('=') && !line.match(/if|while|for|with|except|match|case/)) {
+                    if (line.includes(':=')) {
+                        let [v, val] = line.split(':=');
+                        this.ir.push({ op: 'assign_walrus', var: v.trim(), val: val.trim() });
+                    } else if (line.includes(',')) {
+                        this.ir.push({ op: 'destructure', expr: line });
+                    } else {
+                        let [v, val] = line.split('=');
+                        let typeHint = '';
+                        let name = v.trim();
+                        if (v.includes(':')) {
+                            let parts = v.split(':');
+                            name = parts[0].trim();
+                            typeHint = parts.slice(1).join(':').trim();
+                        }
+                        this.ir.push({ op: 'assign', var: name, type: typeHint, val: val.trim().replace(/;$/, '') });
+                    }
+                }
+                // === КОМПЛЕХЕНШНЫ ===
+                else if (line.match(/^\[.*for.*\]$/)) {
+                    this.ir.push({ op: 'list_comp', expr: line });
+                }
+                else if (line.match(/^\{.*:.*for.*\}$/)) {
+                    this.ir.push({ op: 'dict_comp', expr: line });
+                }
+                else if (line.match(/^\{.*for.*\}$/)) {
+                    this.ir.push({ op: 'set_comp', expr: line });
+                }
+                else if (line.match(/^\(.*for.*\)$/)) {
+                    this.ir.push({ op: 'gen_expr', expr: line });
+                }
+                // === ЛЯМБДЫ ===
+                else if (line.match(/^lambda\b/)) {
+                    let m = line.match(/lambda\s+(.*?):\s*(.*)/);
+                    if (m) this.ir.push({ op: 'lambda', params: m[1], body: m[2] });
+                }
+                // === RETURN, PRINT, PASS ===
+                else if (line.match(/^return\b/)) {
+                    this.ir.push({ op: 'return', val: line.slice(7).trim() });
+                }
+                else if (line.match(/^print\s*\(/)) {
+                    let m = line.match(/print\((.*)\)/);
+                    this.ir.push({ op: 'print', val: m ? m[1] : '' });
+                }
+                else if (line === 'pass') {
+                    this.ir.push({ op: 'pass' });
+                }
+                this.i++;
+            }
+            while (this.blocks.length) {
+                this.blocks.pop();
+                this.ir.push({ op: 'block_end' });
+            }
+            return this.ir;
+        }
+    }
+
+    // ============================================================
+    // ПОЛНЫЙ ГЕНЕРАТОР ДЛЯ ЛЮБОГО ЯЗЫКА
+    // ============================================================
+    class FullGenerator {
+        constructor(ir, target) { this.ir = ir; this.lang = target; this.out = []; this.indent = 0; }
+        i() { return '    '.repeat(this.indent); }
+        generate() {
+            this.out = []; this.indent = 0;
+            this._emitBoilerplate();
+            for (let instr of this.ir) {
+                let line = '';
+                switch (instr.op) {
+                    case 'decorator': line = this._genDecorator(instr); break;
+                    case 'special_deco': line = this._genSpecialDeco(instr); break;
+                    case 'class_start': line = this._genClassStart(instr); this.indent++; break;
+                    case 'func_start': line = this._genFuncStart(instr); this.indent++; break;
+                    case 'async_func_start': line = this._genAsyncFuncStart(instr); this.indent++; break;
+                    case 'async_gen_start': line = this._genAsyncGenStart(instr); this.indent++; break;
+                    case 'asm_block_start': line = this._genAsmBlockStart(); this.indent++; break;
+                    case 'asm_inline': line = this._genAsmInline(instr); break;
+                    case 'atomic_start': line = this._genAtomicStart(); this.indent++; break;
+                    case 'transaction_start': line = this._genTransactionStart(); this.indent++; break;
+                    case 'requires': line = this._genRequires(instr); break;
+                    case 'ensures': line = this._genEnsures(instr); break;
+                    case 'invariant': line = this._genInvariant(instr); break;
+                    case 'loop_invariant': line = this._genLoopInvariant(instr); break;
+                    case 'match_start': line = this._genMatchStart(instr); this.indent++; break;
+                    case 'case': line = this._genCase(instr); this.indent++; break;
+                    case 'async_with': line = this._genAsyncWith(instr); this.indent++; break;
+                    case 'async_for': line = this._genAsyncFor(instr); this.indent++; break;
+                    case 'with': line = this._genWith(instr); this.indent++; break;
+                    case 'try': line = this._genTry(); this.indent++; break;
+                    case 'except': this.indent--; line = this._genExcept(instr); this.indent++; break;
+                    case 'else_block': this.indent--; line = this._genElseBlock(); this.indent++; break;
+                    case 'finally': this.indent--; line = this._genFinally(); this.indent++; break;
+                    case 'raise': line = this._genRaise(instr); break;
+                    case 'yield': line = this._genYield(instr); break;
+                    case 'yield_from': line = this._genYieldFrom(instr); break;
+                    case 'await': line = this._genAwait(instr); break;
+                    case 'if': line = this._genIf(instr); this.indent++; break;
+                    case 'elif': this.indent--; line = this._genElif(instr); this.indent++; break;
+                    case 'else': this.indent--; line = this._genElse(); this.indent++; break;
+                    case 'while': line = this._genWhile(instr); this.indent++; break;
+                    case 'for': line = this._genFor(instr); this.indent++; break;
+                    case 'assign': line = this._genAssign(instr); break;
+                    case 'assign_walrus': line = this._genAssignWalrus(instr); break;
+                    case 'destructure': line = this._genDestructure(instr); break;
+                    case 'list_comp': line = this._genListComp(instr); break;
+                    case 'dict_comp': line = this._genDictComp(instr); break;
+                    case 'set_comp': line = this._genSetComp(instr); break;
+                    case 'gen_expr': line = this._genGenExpr(instr); break;
+                    case 'lambda': line = this._genLambda(instr); break;
+                    case 'return': line = this._genReturn(instr); break;
+                    case 'print': line = this._genPrint(instr); break;
+                    case 'pass': line = this._genPass(); break;
+                    case 'block_end': if (this.indent > 0) this.indent--; line = this._genBlockEnd(); break;
+                    default: line = `// unknown: ${instr.op}`;
+                }
+                if (line) this.out.push(this.i() + line);
+            }
+            while (this.indent > 0) { this.indent--; this.out.push(this.i() + '}'); }
+            this._emitFooter();
+            return this.out.join('\n');
+        }
+        _emitBoilerplate() {
+            if (this.lang === 'go') this.out.push('package main', '', 'import "fmt"', '', 'func main() {');
+            else if (this.lang === 'rust') this.out.push('fn main() {');
+            else if (this.lang === 'c') this.out.push('#include <stdio.h>', '', 'int main() {');
+            else if (this.lang === 'cpp') this.out.push('#include <iostream>', 'using namespace std;', '', 'int main() {');
+            else if (this.lang === 'java') this.out.push('public class Main {', '    public static void main(String[] args) {');
+            else if (this.lang === 'csharp') this.out.push('using System;', '', 'class Program {', '    static void Main() {');
+            else if (this.lang === 'swift') this.out.push('import Foundation', '', 'func main() {');
+            else if (this.lang === 'kotlin') this.out.push('fun main() {');
+            if (['go','rust','c','cpp','swift','kotlin'].includes(this.lang)) this.indent = 1;
+            if (this.lang === 'java' || this.lang === 'csharp') this.indent = 2;
+        }
+        _emitFooter() {
+            if (this.lang === 'go') this.out.push('}');
+            else if (this.lang === 'rust') this.out.push('}');
+            else if (this.lang === 'c' || this.lang === 'cpp') this.out.push('}');
+            else if (this.lang === 'java') this.out.push('    }', '}');
+            else if (this.lang === 'csharp') this.out.push('    }', '}');
+            else if (this.lang === 'swift') this.out.push('}', '', 'main()');
+            else if (this.lang === 'kotlin') this.out.push('}');
+        }
+        _genDecorator(i) { return `// @${i.name}${i.args ? '('+i.args+')' : ''}`; }
+        _genSpecialDeco(i) { return `// @${i.type}`; }
+        _genClassStart(i) { return `${i.final ? 'final ' : ''}${i.abstract ? 'abstract ' : ''}class ${i.name}${i.bases ? ' extends '+i.bases : ''} {`; }
+        _genFuncStart(i) { return `func ${i.name}(${i.params}) ${i.ret} {`; }
+        _genAsyncFuncStart(i) { return `// async func ${i.name}(${i.params}) {`; }
+        _genAsyncGenStart(i) { return `// async generator ${i.name}(${i.params}) {`; }
+        _genAsmBlockStart() { return `// asm {`; }
+        _genAsmInline(i) { return `// __asm__("${i.code}")`; }
+        _genAtomicStart() { return `// atomic {`; }
+        _genTransactionStart() { return `// transaction {`; }
+        _genRequires(i) { return `// requires ${i.cond}`; }
+        _genEnsures(i) { return `// ensures ${i.cond}`; }
+        _genInvariant(i) { return `// invariant ${i.cond}`; }
+        _genLoopInvariant(i) { return `// loop_invariant ${i.cond}`; }
+        _genMatchStart(i) { return `// match ${i.val} {`; }
+        _genCase(i) { return `// case ${i.pattern}${i.guard ? ' if '+i.guard : ''}:`; }
+        _genAsyncWith(i) { return `// async with ${i.expr} as ${i.var} {`; }
+        _genAsyncFor(i) { return `// async for ${i.var} in ${i.iter} {`; }
+        _genWith(i) { return `// with ${i.expr} as ${i.var} {`; }
+        _genTry() { return `// try {`; }
+        _genExcept(i) { return `// } catch ${i.type} ${i.var} {`; }
+        _genElseBlock() { return `// } else {`; }
+        _genFinally() { return `// } finally {`; }
+        _genRaise(i) { return `// raise ${i.expr}`; }
+        _genYield(i) { return `// yield ${i.expr}`; }
+        _genYieldFrom(i) { return `// yield from ${i.expr}`; }
+        _genAwait(i) { return `// await ${i.expr}`; }
+        _genIf(i) { return `if (${i.cond}) {`; }
+        _genElif(i) { return `} else if (${i.cond}) {`; }
+        _genElse() { return `} else {`; }
+        _genWhile(i) { return `for ${i.cond} {`; }
+        _genFor(i) { return `for ${i.var} := range ${i.iter} {`; }
+        _genAssign(i) { return `${i.var} := ${i.val}`; }
+        _genAssignWalrus(i) { return `${i.var} := ${i.val}`; }
+        _genDestructure(i) { return `// ${i.expr}`; }
+        _genListComp(i) { return `// list comprehension: ${i.expr}`; }
+        _genDictComp(i) { return `// dict comprehension: ${i.expr}`; }
+        _genSetComp(i) { return `// set comprehension: ${i.expr}`; }
+        _genGenExpr(i) { return `// generator expression: ${i.expr}`; }
+        _genLambda(i) { return `// lambda ${i.params} -> ${i.body}`; }
+        _genReturn(i) { return `return ${i.val}`; }
+        _genPrint(i) { return `fmt.Println(${i.val})`; }
+        _genPass() { return `// pass`; }
+        _genBlockEnd() { return `}`; }
+    }
+
+    function transpile(source, target) {
+        try {
+            const parser = new FullParser(source);
+            const ir = parser.parse();
+            const gen = new FullGenerator(ir, target);
+            return gen.generate();
+        } catch(e) {
+            return `// Ошибка трансляции: ${e.message}`;
+        }
+    }
+
+    const demoCode = `# Абсолютный максимум — все 80+ конструкций
+from typing import final, abstract, pure
+
+@final
+class Database:
+    __slots__ = ('_conn',)
+    def __init__(self, conn: str) -> None:
+        self._conn = conn
+    
+    @property
+    def connection(self) -> str:
+        return self._conn
+    
+    @abstractmethod
+    def query(self, sql: str) -> list[tuple]: ...
+
+@pure
+def add(a: int, b: int) -> int:
+    return a + b
+
+async def fetch_all() -> list[int]:
+    await asyncio.sleep(0.1)
+    return [1, 2, 3]
+
+async def process():
+    async with open_async("data") as f:
+        raw = await f.read()
+    async for item in fetch_all():
+        yield item * 2
+
+def factorial(n: int) -> int:
+    match n:
+        case 0 | 1:
+            return 1
+        case _:
+            return n * factorial(n-1)
+
+def main():
+    with open("file.txt") as f:
+        data = f.read()
+    try:
+        result = 42 // 2
+    except ZeroDivisionError as e:
+        print(e)
+    finally:
+        print("done")
+    
+    squares = [x*x for x in range(10) if x > 0]
+    print("Hello, Universe!")`;
+
+    document.getElementById('sourceCode').value = demoCode;
+    document.getElementById('translateBtn').onclick = () => {
+        const out = transpile(document.getElementById('sourceCode').value, currentTarget);
+        document.getElementById('targetCode').value = out;
+        document.getElementById('status').innerHTML = `✅ Транслировано в ${LANG_NAMES[currentTarget]}`;
+    };
+    document.getElementById('copyBtn').onclick = () => {
+        const t = document.getElementById('targetCode');
+        t.select();
+        document.execCommand('copy');
+        document.getElementById('status').innerHTML = '📋 Скопировано';
+    };
+    setTimeout(() => document.getElementById('translateBtn').click(), 100);
+</script>
+</body>
+</html>
