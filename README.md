@@ -29,7 +29,7 @@ Python, JavaScript, TypeScript, Go, Rust, C, C++, Java, Kotlin, C#, Swift, Ruby,
 
 ## 🎮 ПОПРОБОВАТЬ ОНЛАЙН
 
-👉 **[Открыть PolyLang ∞](https://uninitializer.github.io/Polylang/)** 👈
+👉 **[Открыть PolyLang ∞](https://Uninitializer.github.io/Polylang/)** 👈
 
 ## 📦 ЗАПУСК ЛОКАЛЬНО
 
